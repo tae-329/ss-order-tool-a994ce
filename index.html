@@ -258,7 +258,7 @@ const CORE = (() => {
       if (!r || !s(r[col["상품주문번호"]])) continue;
       const q = Number(r[col["수량"]]);
       orders.push({
-        수취인명: maskName(r[col["수취인명"]]), 연락처: s(r[col["수취인연락처1"]]), 우편번호: s(r[col["우편번호"]]),
+        상품주문번호: s(r[col["상품주문번호"]]), 수취인명: maskName(r[col["수취인명"]]), 연락처: s(r[col["수취인연락처1"]]), 우편번호: s(r[col["우편번호"]]),
         주소: s(r[col["통합배송지"]]), 수량: Number.isFinite(q) ? q : s(r[col["수량"]]),
         상품명: s(r[col["상품명"]]), 배송메세지: s(r[col["배송메세지"]]), 옵션: s(r[col["옵션정보"]]),
         구분: s(r[mark]).toUpperCase(),
@@ -284,7 +284,7 @@ const CORE = (() => {
     const snd = STORES[store];
     const aoa = [HSC_HEADER.map(txt)];
     for (const o of orders) {
-      aoa.push([o.수취인명, null, txt(o.연락처), null, txt(o.우편번호), o.주소, txt(o.상품명), o.옵션,
+      aoa.push([o.수취인명, txt(o.상품주문번호), txt(o.연락처), null, txt(o.우편번호), o.주소, txt(o.상품명), o.옵션,
         o.수량, o.배송메세지 || null, null, snd.name, txt(snd.tel), snd.addr]);
     }
     const wb = XLSX.utils.book_new();
@@ -296,7 +296,7 @@ const CORE = (() => {
     const aoa = [JY_HEADER];
     for (const o of orders) {
       aoa.push([o.수취인명, o.수취인명, txt(o.연락처), txt(o.연락처), o.주소, o.배송메세지, o.수량,
-        (o.상품명 + " " + o.옵션).trim(), "", "", ""]);
+        (o.상품명 + " " + o.옵션).trim(), txt(o.상품주문번호), "", ""]);
     }
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, sheetFrom(aoa, [12, 12, 15, 15, 55, 25, 8, 70, 12, 12, 8]), "발주양식");
