@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+</head>
+<body>
+<title>스스 발주 변환기</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: 한 장짜리 작업대 — 위에서 아래로 스토어 선택 → 파일 → 결과/다운로드 */
+:root {
+  --bg: #f3f5f2; --panel: #ffffff; --ink: #1c2420; --muted: #5d6a63; --line: #d9dfda;
+  --accent: #1f6b4f; --accent-ink: #ffffff; --accent-soft: #e2efe8;
+  --hsc: #2556a8; --hsc-soft: #e4ecfa; --jy: #b4531a; --jy-soft: #fbeadf; --wz: #6b3fa0; --wz-soft: #efe7f8;
+  --warn: #a83a2a; --warn-soft: #fbe6e2;
+  --sans: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #121614; --panel: #1b201d; --ink: #e6ece8; --muted: #9aa8a0; --line: #2d3530;
+  --accent: #5cc193; --accent-ink: #0d1a14; --accent-soft: #1d3329;
+  --hsc: #8fb3f2; --hsc-soft: #1c2840; --jy: #f0a26f; --jy-soft: #3a2518; --wz: #c7a5f0; --wz-soft: #2c2140;
+  --warn: #f19a8a; --warn-soft: #3a1f1a; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #121614; --panel: #1b201d; --ink: #e6ece8; --muted: #9aa8a0; --line: #2d3530;
+  --accent: #5cc193; --accent-ink: #0d1a14; --accent-soft: #1d3329;
+  --hsc: #8fb3f2; --hsc-soft: #1c2840; --jy: #f0a26f; --jy-soft: #3a2518; --wz: #c7a5f0; --wz-soft: #2c2140;
+  --warn: #f19a8a; --warn-soft: #3a1f1a; color-scheme: dark; }
+
+body { background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.55; }
+.wrap { max-width: 880px; margin: 0 auto; padding-block: 28px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 20px; }
+h1 { font-size: 1.6rem; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+.sub { color: var(--muted); margin: 4px 0 0; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: grid; gap: 12px; min-width: 0; }
+.label { font-size: .78rem; font-weight: 600; color: var(--muted); letter-spacing: .06em; }
+.seg { display: flex; gap: 8px; flex-wrap: wrap; }
+.seg button { font: inherit; font-weight: 600; padding: 10px 18px; border-radius: 8px; border: 1.5px solid var(--line);
+  background: transparent; color: var(--ink); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.drop { border: 2px dashed var(--line); border-radius: 10px; padding: 26px 16px; text-align: center; cursor: pointer; display: grid; gap: 6px; }
+.drop.over, .drop:hover { border-color: var(--accent); background: var(--accent-soft); }
+.drop strong { font-size: 1.05rem; }
+.drop small { color: var(--muted); }
+.legend { display: flex; gap: 8px 16px; flex-wrap: wrap; font-size: .9rem; color: var(--muted); }
+.tag { display: inline-block; font-family: var(--mono); font-weight: 500; font-size: .8rem; padding: 1px 8px; border-radius: 5px; }
+.t-H { background: var(--hsc-soft); color: var(--hsc); }
+.t-J { background: var(--jy-soft); color: var(--jy); }
+.t-3 { background: var(--wz-soft); color: var(--wz); }
+.t-x { background: var(--warn-soft); color: var(--warn); }
+.status { font-weight: 500; }
+.status.err { color: var(--warn); }
+.counts { display: flex; flex-wrap: wrap; gap: 8px; }
+.count { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; display: grid; min-width: 92px; }
+.count b { font-size: 1.3rem; font-variant-numeric: tabular-nums; }
+.count span { font-size: .8rem; color: var(--muted); }
+.tablebox { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; font-size: .88rem; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: .75rem; color: var(--muted); font-weight: 600; letter-spacing: .04em; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td.prod { min-width: 240px; }
+.dl { display: flex; flex-wrap: wrap; gap: 10px; }
+.dl button { font: inherit; font-weight: 600; padding: 11px 16px; border-radius: 8px; cursor: pointer; border: 1.5px solid var(--accent);
+  background: var(--panel); color: var(--accent); }
+.dl button.primary { background: var(--accent); color: var(--accent-ink); }
+.dl button:disabled { opacity: .4; cursor: not-allowed; }
+button:focus-visible, .drop:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.pwrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-size: .9rem; }
+.pwrow > label:first-child { font-weight: 600; }
+.pwrow input[type=password] { font: inherit; padding: 8px 10px; border-radius: 7px; border: 1.5px solid var(--line); background: var(--bg); color: var(--ink); min-width: 0; }
+.pwrow input[type=password]:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
+.chk { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); cursor: pointer; }
+.dl button.ghost { border-color: var(--line); color: var(--muted); }
+.note { font-size: .85rem; color: var(--muted); margin: 0; }
+.example { font-size: .75rem; font-weight: 600; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 6px; margin-left: 6px; }
+.spin { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%;
+  animation: r .8s linear infinite; vertical-align: -2px; margin-right: 6px; }
+@keyframes r { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+<div class="wrap">
+  <header>
+    <h1>스스 발주 변환기</h1>
+    <p class="sub">스마트스토어 발주발송관리 엑셀을 넣으면 P열 표시에 따라 HSC · 진양 · 위짐 파일로 나눠 드려요. 파일은 이 브라우저 안에서만 처리돼요.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="l-store">
+    <div class="label" id="l-store">1. 스토어</div>
+    <div class="seg" id="stores"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="l-file">
+    <div class="label" id="l-file">2. 스마트스토어 파일</div>
+    <label class="drop" id="drop" tabindex="0">
+      <strong>파일을 여기로 끌어오거나 눌러서 선택</strong>
+      <small>스마트스토어_선택주문발주발송관리_….xlsx · 파일은 이 브라우저 밖으로 나가지 않아요</small>
+      <input type="file" id="file" accept=".xlsx,.xls" hidden>
+    </label>
+    <div class="pwrow">
+      <label for="pw">엑셀 암호</label>
+      <input type="password" id="pw" autocomplete="off" placeholder="다운로드할 때 정한 암호" size="16">
+      <label class="chk"><input type="checkbox" id="pwkeep" checked> 이 기기에 기억</label>
+    </div>
+    <div class="legend">
+      <span>옵션정보 옆 P열에 적은 표시:</span>
+      <span><span class="tag t-H">H</span> HSC(한진)</span>
+      <span><span class="tag t-J">J</span> 진양(CJ)</span>
+      <span><span class="tag t-3">3</span> 위짐 (원본 행 그대로)</span>
+    </div>
+    <div class="status" id="status" role="status"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="l-result">
+    <div class="label" id="l-result">3. 결과 <span class="example" id="exampleTag">예시</span></div>
+    <div class="counts" id="counts"></div>
+    <div class="tablebox"><table>
+      <thead><tr><th>표시</th><th>보낼 곳</th><th>수취인</th><th>상품명</th><th>옵션</th><th>수량</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table></div>
+    <div class="dl" id="dl">
+      <button id="b-all" class="primary" disabled>전체 한 번에 받기 (.zip)</button>
+      <button id="b-hsc" disabled>HSC (.xlsx)</button>
+      <button id="b-jy" disabled>진양 (.zip 안에 .xls)</button>
+      <button id="b-wz" disabled>위짐 (.xlsx)</button>
+      <button id="b-clear" class="ghost" disabled>화면 지우기</button>
+    </div>
+    <p class="note" id="dlnote">진양 양식은 .xls라서 압축(.zip)으로 받아요. 압축을 풀면 이지어드민에 올릴 .xls 파일이 나와요.</p>
+    <p class="note">고객 정보는 서버에 저장되거나 전송되지 않고, 이 탭을 닫거나 "화면 지우기"를 누르면 사라져요. 함께 쓰는 PC에서는 다 받은 뒤 "화면 지우기"를 눌러 주세요.</p>
+  </section>
+</div>
+
+<script>
+/* 스마트스토어 → HSC/진양 변환 코어 (브라우저·Node 공용). 전역 XLSX, JSZip 필요. */
+const CORE = (() => {
+  const STORES = {
+    "하모니아":   { name: "해피리빙", tel: "010-4701-6041", addr: "김포시 통진읍 서암고정로295 AN 내 HSC" },
+    "데일리핫픽": { name: "해피리빙", tel: "010-4701-6041", addr: "김포시 통진읍 서암고정로295 AN 내 HSC" },
+  };
+  const HSC_HEADER = ["받는분성명", "고객주문번호", "받는분전화번호", "받는분기타연락처", "우편번호",
+    "받는분주소(전체, 분할)", "품목명", "내품명", "내품수량", "배송메세지1", "기타1",
+    "보내는분성명", "보내는분전화번호", "보내는분주소(전체, 분할)"];
+  const JY_HEADER = ["구매자성명", "받는사람성명", "받는분전화번호", "기타 전화번호", "받는분주소(전체, 분할)",
+    "배송메세지1", "내품수량", "품목명", "고객주문번호", "운송장번호", "운임구분"];
+  const NEED = ["상품주문번호", "수취인명", "수취인연락처1", "우편번호", "통합배송지", "수량", "상품명", "배송메세지", "옵션정보"];
+
+  const subtle = globalThis.crypto.subtle;
+  const b64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+  const cat = (...arrs) => {
+    const out = new Uint8Array(arrs.reduce((n, a) => n + a.length, 0));
+    let o = 0; for (const a of arrs) { out.set(a, o); o += a.length; }
+    return out;
+  };
+  const u32 = (n) => { const b = new Uint8Array(4); new DataView(b.buffer).setUint32(0, n, true); return b; };
+  const hashName = (h) => ({ SHA512: "SHA-512", SHA384: "SHA-384", SHA256: "SHA-256", SHA1: "SHA-1" }[h] || h);
+  const fit = (buf, len, pad) => { const o = new Uint8Array(len).fill(pad); o.set(buf.subarray(0, len)); return o; };
+
+  // AES-CBC 복호화 (패딩 없음) — WebCrypto는 PKCS7만 지원하므로 패딩 블록을 만들어 붙인다
+  async function aesCbcNoPad(keyBytes, iv, data) {
+    const key = await subtle.importKey("raw", keyBytes, "AES-CBC", false, ["encrypt", "decrypt"]);
+    const last = data.subarray(data.length - 16);
+    const padBlock = new Uint8Array(await subtle.encrypt({ name: "AES-CBC", iv: last }, key, new Uint8Array(0)));
+    const plain = await subtle.decrypt({ name: "AES-CBC", iv }, key, cat(data, padBlock));
+    return new Uint8Array(plain);
+  }
+
+  // ECMA-376 Agile 암호 해제 (엑셀 '암호로 보호' 파일)
+  async function decryptAgile(bytes, password) {
+    const cfb = XLSX.CFB.read(bytes, { type: "array" });
+    const infoE = XLSX.CFB.find(cfb, "EncryptionInfo");
+    const pkgE = XLSX.CFB.find(cfb, "EncryptedPackage");
+    if (!infoE || !pkgE) throw new Error("암호 정보를 찾지 못했어요.");
+    const info = new Uint8Array(infoE.content);
+    const xml = new TextDecoder().decode(info.subarray(8));
+    const attr = (tag, name) => {
+      const m = xml.match(new RegExp("<" + tag + "\\b[^>]*\\b" + name + "=\"([^\"]*)\""));
+      if (!m) throw new Error("이 암호 방식은 지원하지 않아요.");
+      return m[1];
+    };
+    const kdSalt = b64(attr("keyData", "saltValue"));
+    const kdHash = hashName(attr("keyData", "hashAlgorithm"));
+    const blockSize = +attr("keyData", "blockSize");
+    const pSalt = b64(attr("p:encryptedKey", "saltValue"));
+    const pHash = hashName(attr("p:encryptedKey", "hashAlgorithm"));
+    const spin = +attr("p:encryptedKey", "spinCount");
+    const keyBits = +attr("p:encryptedKey", "keyBits");
+    const encKey = b64(attr("p:encryptedKey", "encryptedKeyValue"));
+
+    const pw = new Uint8Array(password.length * 2);
+    for (let i = 0; i < password.length; i++) { const c = password.charCodeAt(i); pw[2 * i] = c & 255; pw[2 * i + 1] = c >> 8; }
+    let h = new Uint8Array(await subtle.digest(pHash, cat(pSalt, pw)));
+    const buf = new Uint8Array(4 + h.length); const dv = new DataView(buf.buffer);
+    for (let i = 0; i < spin; i++) { dv.setUint32(0, i, true); buf.set(h, 4); h = new Uint8Array(await subtle.digest(pHash, buf)); }
+    const blockKey = Uint8Array.from([0x14, 0x6e, 0x0b, 0xe7, 0xab, 0xac, 0xd0, 0xd6]);
+    const kek = fit(new Uint8Array(await subtle.digest(pHash, cat(h, blockKey))), keyBits / 8, 0x36);
+    const secret = (await aesCbcNoPad(kek, fit(pSalt, blockSize, 0x36), encKey)).subarray(0, keyBits / 8);
+
+    const pkg = new Uint8Array(pkgE.content);
+    const size = Number(new DataView(pkg.buffer, pkg.byteOffset).getBigUint64(0, true));
+    const enc = pkg.subarray(8);
+    const parts = [];
+    for (let i = 0, off = 0; off < enc.length; i++, off += 4096) {
+      const iv = fit(new Uint8Array(await subtle.digest(kdHash, cat(kdSalt, u32(i)))), blockSize, 0x36);
+      let seg = enc.subarray(off, Math.min(off + 4096, enc.length));
+      if (seg.length % 16) seg = seg.subarray(0, seg.length - (seg.length % 16));
+      parts.push(await aesCbcNoPad(secret, iv, seg));
+    }
+    const out = cat(...parts).subarray(0, size);
+    if (out[0] !== 0x50 || out[1] !== 0x4b) throw new Error("엑셀 암호가 맞지 않아요. 암호 칸을 확인해 주세요.");
+    return out;
+  }
+
+  const s = (v) => (v === null || v === undefined ? "" : String(v).trim());
+  // 수취인 이름 마지막 글자 → * (이미 *로 끝나면 그대로)
+  const maskName = (v) => { const n = s(v); return !n || n.endsWith("*") ? n : n.slice(0, -1) + "*"; };
+
+  async function readOrders(bytes, password) {
+    let data = bytes;
+    const isOle = bytes[0] === 0xd0 && bytes[1] === 0xcf;
+    if (isOle) {
+      const cfb = XLSX.CFB.read(bytes, { type: "array" });
+      if (XLSX.CFB.find(cfb, "EncryptedPackage")) {
+        if (!password) throw new Error("암호가 걸린 파일이에요. 위의 엑셀 암호 칸에 암호를 넣어 주세요.");
+        data = await decryptAgile(bytes, password);
+      }
+    }
+    const wb = XLSX.read(data, { type: "array", cellNF: true });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+    const hr = rows.findIndex((r, i) => i < 10 && r.map(s).includes("상품주문번호"));
+    if (hr < 0) throw new Error("'상품주문번호' 헤더가 없어요. 스마트스토어 발주발송관리 파일이 맞나요?");
+    const headers = rows[hr].map(s);
+    const col = {};
+    headers.forEach((h, i) => { if (h && !(h in col)) col[h] = i; });
+    const missing = NEED.filter((h) => !(h in col));
+    if (missing.length) throw new Error("필수 열이 없어요: " + missing.join(", "));
+    const mark = col["옵션정보"] + 1;
+    const range = XLSX.utils.decode_range(ws["!ref"]);
+    const cellsOf = (R) => {
+      const out = [];
+      for (let C = 0; C <= range.e.c; C++) {
+        const c = ws[XLSX.utils.encode_cell({ r: R, c: C })];
+        out.push(c ? { t: c.t, v: c.v, ...(c.z ? { z: c.z } : {}) } : null);
+      }
+      return out;
+    };
+    const orders = [];
+    for (let i = hr + 1; i < rows.length; i++) {
+      const r = rows[i];
+      if (!r || !s(r[col["상품주문번호"]])) continue;
+      const q = Number(r[col["수량"]]);
+      orders.push({
+        수취인명: maskName(r[col["수취인명"]]), 연락처: s(r[col["수취인연락처1"]]), 우편번호: s(r[col["우편번호"]]),
+        주소: s(r[col["통합배송지"]]), 수량: Number.isFinite(q) ? q : s(r[col["수량"]]),
+        상품명: s(r[col["상품명"]]), 배송메세지: s(r[col["배송메세지"]]), 옵션: s(r[col["옵션정보"]]),
+        구분: s(r[mark]).toUpperCase(),
+        _raw: cellsOf(range.s.r + i).map((c, C) => (C === col["수취인명"] && c ? { t: "s", v: maskName(c.v) } : c)),
+      });
+    }
+    return { orders, rawHeader: cellsOf(range.s.r + hr) };
+  }
+
+  const txt = (v) => ({ t: "s", v, z: "@" });
+  // 결과물에 수식이 절대 들어가지 않도록 f(수식) 속성 제거
+  function stripFormulas(ws) {
+    for (const k of Object.keys(ws)) if (k[0] !== "!" && ws[k]) { delete ws[k].f; delete ws[k].F; }
+    return ws;
+  }
+  function sheetFrom(aoa, widths) {
+    const ws = stripFormulas(XLSX.utils.aoa_to_sheet(aoa));
+    ws["!cols"] = widths.map((w) => ({ wch: w }));
+    return ws;
+  }
+
+  function buildHSC(orders, store) {
+    const snd = STORES[store];
+    const aoa = [HSC_HEADER.map(txt)];
+    for (const o of orders) {
+      aoa.push([o.수취인명, null, txt(o.연락처), null, txt(o.우편번호), o.주소, txt(o.상품명), o.옵션,
+        o.수량, o.배송메세지 || null, null, snd.name, txt(snd.tel), snd.addr]);
+    }
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, sheetFrom(aoa, [10, 12, 15, 15, 8, 55, 60, 18, 8, 25, 6, 10, 15, 35]), "Sheet1");
+    return new Uint8Array(XLSX.write(wb, { type: "array", bookType: "xlsx" }));
+  }
+
+  function buildJinyang(orders) {
+    const aoa = [JY_HEADER];
+    for (const o of orders) {
+      aoa.push([o.수취인명, o.수취인명, txt(o.연락처), txt(o.연락처), o.주소, o.배송메세지, o.수량,
+        (o.상품명 + " " + o.옵션).trim(), "", "", ""]);
+    }
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, sheetFrom(aoa, [12, 12, 15, 15, 55, 25, 8, 70, 12, 12, 8]), "발주양식");
+    return new Uint8Array(XLSX.write(wb, { type: "array", bookType: "biff8" }));
+  }
+
+  // 위짐: 원본 헤더 + 해당 행 그대로 복사 (변환 없음)
+  function buildWezym(orders, rawHeader) {
+    const ws = {};
+    const all = [rawHeader, ...orders.map((o) => o._raw)];
+    const width = Math.max(...all.map((r) => r.length));
+    all.forEach((row, R) => row.forEach((c, C) => {
+      if (!c) return;
+      const cell = { ...c };
+      if (cell.t === "s") cell.z = "@";
+      ws[XLSX.utils.encode_cell({ r: R, c: C })] = cell;
+    }));
+    ws["!ref"] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: all.length - 1, c: width - 1 } });
+    ws["!cols"] = Array.from({ length: width }, () => ({ wch: 18 }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, stripFormulas(ws), "Sheet1");
+    return new Uint8Array(XLSX.write(wb, { type: "array", bookType: "xlsx" }));
+  }
+
+  function dateTag(filename) {
+    const m = filename.match(/20(\d{6})/);
+    if (m) return m[1];
+    const d = new Date();
+    return String(d.getFullYear()).slice(2) + String(d.getMonth() + 1).padStart(2, "0") + String(d.getDate()).padStart(2, "0");
+  }
+
+  async function convert(bytes, filename, store, password) {
+    const { orders, rawHeader } = await readOrders(bytes, password);
+    const tag = dateTag(filename);
+    const hsc = orders.filter((o) => o.구분 === "H");
+    const jy = orders.filter((o) => o.구분 === "J");
+    const wz = orders.filter((o) => o.구분 === "3");
+    const etc = orders.filter((o) => !["H", "J", "3"].includes(o.구분));
+    const out = { orders, hsc, jy, wz, etc, tag, files: {} };
+    if (wz.length) out.files.wz = { name: `위짐_${tag}_${store}_변환완료.xlsx`, data: buildWezym(wz, rawHeader) };
+    if (hsc.length) out.files.hsc = { name: `HSC_택배 발주서 해피리빙(${tag})_${store}_변환완료.xlsx`, data: buildHSC(hsc, store) };
+    if (jy.length) out.files.jy = { name: `진양물류 통합양식_${tag}_${store}_변환완료.xls`, data: buildJinyang(jy) };
+    return out;
+  }
+
+  async function zip(files, name) {
+    const z = new JSZip();
+    for (const f of files) z.file(f.name, f.data);
+    return { name, data: await z.generateAsync({ type: "uint8array" }) };
+  }
+
+  return { STORES, convert, zip, readOrders };
+})();
+
+/* ---------- 화면 ---------- */
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const DEST = { H: ["HSC(한진)", "t-H"], J: ["진양(CJ)", "t-J"], "3": ["위짐", "t-3"] };
+  let store = Object.keys(CORE.STORES)[0];
+  try { const saved = localStorage.getItem("store"); if (saved && CORE.STORES[saved]) store = saved; } catch (e) {}
+  let result = null;
+
+  const storesEl = $("stores");
+  for (const name of Object.keys(CORE.STORES)) {
+    const b = document.createElement("button");
+    b.type = "button"; b.id = "store-" + name; b.textContent = name;
+    b.addEventListener("click", () => { store = name; try { localStorage.setItem("store", name); } catch (e) {} paintStores(); if (lastFile) run(lastFile); });
+    storesEl.appendChild(b);
+  }
+  function paintStores() { for (const b of storesEl.children) b.setAttribute("aria-pressed", String(b.textContent === store)); }
+  paintStores();
+
+  function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+  function render(orders, counts, isExample) {
+    $("exampleTag").hidden = !isExample;
+    const c = $("counts"); c.replaceChildren();
+    for (const [label, n] of counts) { const d = el("div", "count"); d.append(el("b", null, String(n)), el("span", null, label)); c.append(d); }
+    const tb = $("rows"); tb.replaceChildren();
+    for (const o of orders) {
+      const tr = document.createElement("tr");
+      const d = DEST[o.구분];
+      const t1 = el("td"); t1.append(el("span", "tag " + (d ? d[1] : "t-x"), o.구분 || "빈칸"));
+      tr.append(t1, el("td", null, d ? d[0] : "변환 안 됨"), el("td", null, o.수취인명), el("td", "prod", o.상품명), el("td", null, o.옵션), el("td", null, String(o.수량)));
+      tb.append(tr);
+    }
+  }
+
+  // 처음 화면: 예시
+  render([
+    { 구분: "H", 수취인명: "김은*", 상품명: "[국내매장판] 나이키 우먼스 프리 메트콘 5 DV3950-104", 옵션: "사이즈: 240", 수량: 1 },
+    { 구분: "J", 수취인명: "이승*", 상품명: "[국내매장판] 나이키 프로 옥타 써마 핏 ADV 팬츠 HV3804-010", 옵션: "사이즈: M", 수량: 1 },
+    { 구분: "3", 수취인명: "조용*", 상품명: "[국내매장판] 나이키 스트럭처 A 프레임 볼캡 IH8778-101", 옵션: "사이즈: M/L", 수량: 1 },
+  ], [["HSC", 1], ["진양", 1], ["위짐", 1], ["변환 안 됨", 0]], true);
+
+  const status = $("status");
+  function setStatus(text, kind) { status.className = "status" + (kind === "err" ? " err" : ""); status.replaceChildren(); if (kind === "busy") status.append(el("span", "spin")); status.append(text); }
+
+  let lastFile = null;
+  // 엑셀 암호: 페이지 코드에 넣지 않음. 체크한 경우에만 이 기기 브라우저에 기억
+  const pwEl = $("pw"), keepEl = $("pwkeep");
+  try { const k = localStorage.getItem("pw"); if (k) pwEl.value = k; } catch (e) {}
+  function rememberPw() {
+    try { if (keepEl.checked && pwEl.value) localStorage.setItem("pw", pwEl.value); else localStorage.removeItem("pw"); } catch (e) {}
+  }
+  pwEl.addEventListener("change", () => { rememberPw(); if (lastFile && !result) run(lastFile); });
+  keepEl.addEventListener("change", rememberPw);
+  async function run(file) {
+    lastFile = file;
+    result = null; setButtons();
+    setStatus(`${file.name} — 암호 풀고 변환하는 중…`, "busy");
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const r = await CORE.convert(bytes, file.name, store, pwEl.value);
+      result = r; rememberPw();
+      render(r.orders, [["HSC", r.hsc.length], ["진양", r.jy.length], ["위짐", r.wz.length], ["변환 안 됨", r.etc.length]], false);
+      const warn = r.etc.length ? ` · 표시 없는 주문 ${r.etc.length}건은 빠졌어요` : "";
+      setStatus(`[${store}] ${file.name} — 주문 ${r.orders.length}건 변환 완료${warn}`, r.etc.length ? "err" : "");
+    } catch (e) {
+      setStatus(`변환하지 못했어요: ${e.message || e}`, "err");
+    }
+    setButtons();
+  }
+
+  function setButtons() {
+    const f = result ? result.files : {};
+    $("b-hsc").disabled = !f.hsc; $("b-jy").disabled = !f.jy; $("b-wz").disabled = !f.wz;
+    $("b-all").disabled = !(f.hsc || f.jy || f.wz) || !downloads;
+    $("b-clear").disabled = !result && !lastFile;
+  }
+
+  // 일반 웹(로그인 불필요)에서 열리면 브라우저 기본 다운로드, Claude 화면 안이면 downloads 기능 사용
+  const STANDALONE = !window.claude;
+  let downloads = null;
+  if (STANDALONE) {
+    downloads = { save: async ({ filename, data }) => {
+      const url = URL.createObjectURL(new Blob([data]));
+      const a = document.createElement("a"); a.href = url; a.download = filename;
+      document.body.append(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+    } };
+    $("b-jy").textContent = "진양 (.xls)";
+    $("dlnote").hidden = true;
+  } else {
+    (async () => {
+      try { downloads = await window.claude.use("downloads"); } catch (e) { downloads = null; }
+      if (!downloads) $("dlnote").textContent = "이 화면에서는 파일 저장이 막혀 있어요. claude.ai에서 이 페이지를 직접 열어 주세요.";
+      setButtons();
+    })();
+  }
+
+  async function save(file) {
+    if (!downloads) return;
+    try { await downloads.save({ filename: file.name, data: file.data.slice(0) }); setStatus(`저장했어요: ${file.name}`); }
+    catch (e) { if (e && e.code !== "declined") setStatus(`저장하지 못했어요 (${e.code || e}). 잠시 뒤 다시 눌러 주세요.`, "err"); }
+  }
+  $("b-hsc").addEventListener("click", () => save(result.files.hsc));
+  $("b-wz").addEventListener("click", () => save(result.files.wz));
+  $("b-jy").addEventListener("click", async () => save(STANDALONE ? result.files.jy
+    : await CORE.zip([result.files.jy], result.files.jy.name.replace(/\.xls$/, ".zip"))));
+  $("b-all").addEventListener("click", async () => {
+    const files = Object.values(result.files);
+    save(await CORE.zip(files, `변환완료_${result.tag}_${store}.zip`));
+  });
+
+  $("b-clear").addEventListener("click", () => {
+    result = null; lastFile = null;
+    render([], [["HSC", 0], ["진양", 0], ["위짐", 0], ["변환 안 됨", 0]], false);
+    setStatus("화면을 지웠어요. 고객 정보가 이 페이지에 남아 있지 않아요.");
+    setButtons();
+  });
+
+  const drop = $("drop"), input = $("file");
+  input.addEventListener("change", () => { if (input.files[0]) run(input.files[0]); input.value = ""; });
+  drop.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); input.click(); } });
+  ["dragenter", "dragover"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+  ["dragleave", "drop"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
+  drop.addEventListener("drop", (e) => { const f = e.dataTransfer.files[0]; if (f) run(f); });
+})();
+</script>
+
+</body>
+</html>
