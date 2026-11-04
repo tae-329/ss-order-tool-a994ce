@@ -128,12 +128,13 @@ button:focus-visible, .drop:focus-visible { outline: 3px solid var(--accent); ou
     </table></div>
     <div class="dl" id="dl">
       <button id="b-all" class="primary" disabled>전체 한 번에 받기 (.zip)</button>
-      <button id="b-hsc" disabled>HSC + 일괄배송 (.zip)</button>
-      <button id="b-jy" disabled>진양 + 일괄배송 (.zip)</button>
-      <button id="b-wz" disabled>위짐 + 일괄배송 (.zip)</button>
+      <button id="b-hsc" disabled>HSC (.xlsx)</button>
+      <button id="b-jy" disabled>진양 (.zip)</button>
+      <button id="b-wz" disabled>위짐 (.zip)</button>
+      <button id="b-bulk" disabled>일괄배송 CJ·한진 (.zip)</button>
       <button id="b-clear" class="ghost" disabled>화면 지우기</button>
     </div>
-    <p class="note" id="dlnote">각 창고 버튼은 출품표와 일괄배송(상품주문번호 입력됨, 송장번호만 비어 있음) 파일을 함께 .zip으로 받아요.</p>
+    <p class="note" id="dlnote">.xls 파일은 압축(.zip)으로 받아요. 일괄배송은 CJ(위짐+진양)·한진(HSC) 2개이고, 상품주문번호가 들어 있어 송장번호만 넣으면 돼요.</p>
     <p class="note">고객 정보는 서버에 저장되거나 전송되지 않고, 이 탭을 닫거나 "화면 지우기"를 누르면 사라져요. 함께 쓰는 PC에서는 다 받은 뒤 "화면 지우기"를 눌러 주세요.</p>
   </section>
 </div>
@@ -318,10 +319,9 @@ const CORE = (() => {
   }
 
   // 스마트스토어 일괄배송(발송처리) 업로드 양식 — 송장번호만 비움, 출품표와 같은 순서
-  const COURIER = { H: "한진택배", J: "CJ대한통운", "3": "CJ대한통운" };
-  function buildBulk(orders, wh) {
+  function buildBulk(orders, courier) {
     const aoa = [["상품주문번호", "배송방법", "택배사", "송장번호"].map(txt)];
-    for (const o of orders) aoa.push([txt(o.상품주문번호), txt("택배,등기,소포"), txt(COURIER[wh]), txt("")]);
+    for (const o of orders) aoa.push([txt(o.상품주문번호), txt("택배,등기,소포"), txt(courier), txt("")]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, sheetFrom(aoa, [25, 32, 30, 30]), "발송처리");
     return new Uint8Array(XLSX.write(wb, { type: "array", bookType: "biff8" }));
@@ -342,14 +342,14 @@ const CORE = (() => {
     const wz = orders.filter((o) => o.구분 === "3");
     const etc = orders.filter((o) => !["H", "J", "3"].includes(o.구분));
     const out = { orders, hsc, jy, wz, etc, tag, files: {} };
-    const label = { H: "HSC", J: "진양", "3": "위짐" };
-    const add = (key, wh, rows, name, data) => {
-      if (!rows.length) return;
-      out.files[key] = [{ name, data }, { name: `일괄배송_${label[wh]}_${tag}_${store}.xls`, data: buildBulk(rows, wh) }];
-    };
-    add("wz", "3", wz, `해피리빙 주식회사(647362)_${store}_20${tag}_변환완료.xls`, wz.length && buildWezym(wz));
-    add("hsc", "H", hsc, `HSC_택배 발주서 해피리빙(${tag})_${store}_변환완료.xlsx`, hsc.length && buildHSC(hsc, store));
-    add("jy", "J", jy, `진양물류 통합양식_${tag}_${store}_변환완료.xls`, jy.length && buildJinyang(jy));
+    if (wz.length) out.files.wz = { name: `해피리빙 주식회사(647362)_${store}_20${tag}_변환완료.xls`, data: buildWezym(wz) };
+    if (hsc.length) out.files.hsc = { name: `HSC_택배 발주서 해피리빙(${tag})_${store}_변환완료.xlsx`, data: buildHSC(hsc, store) };
+    if (jy.length) out.files.jy = { name: `진양물류 통합양식_${tag}_${store}_변환완료.xls`, data: buildJinyang(jy) };
+    // 일괄배송: 택배사별 2개 — CJ(위짐 먼저, 그 다음 진양) / 한진(HSC)
+    out.bulk = [];
+    const cj = [...wz, ...jy];
+    if (cj.length) out.bulk.push({ name: `일괄배송_CJ대한통운_${tag}_${store}.xls`, data: buildBulk(cj, "CJ대한통운") });
+    if (hsc.length) out.bulk.push({ name: `일괄배송_한진택배_${tag}_${store}.xls`, data: buildBulk(hsc, "한진택배") });
     return out;
   }
 
@@ -435,6 +435,7 @@ const CORE = (() => {
   function setButtons() {
     const f = result ? result.files : {};
     $("b-hsc").disabled = !f.hsc; $("b-jy").disabled = !f.jy; $("b-wz").disabled = !f.wz;
+    $("b-bulk").disabled = !(result && result.bulk.length);
     $("b-all").disabled = !(f.hsc || f.jy || f.wz) || !downloads;
     $("b-clear").disabled = !result && !lastFile;
   }
@@ -449,7 +450,7 @@ const CORE = (() => {
       document.body.append(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 30000);
     } };
-    $("b-hsc").textContent = "HSC + 일괄배송"; $("b-jy").textContent = "진양 + 일괄배송"; $("b-wz").textContent = "위짐 + 일괄배송";
+    $("b-jy").textContent = "진양 (.xls)"; $("b-wz").textContent = "위짐 (.xls)"; $("b-bulk").textContent = "일괄배송 CJ·한진 (.xls 2개)";
     $("dlnote").hidden = true;
   } else {
     (async () => {
@@ -464,18 +465,18 @@ const CORE = (() => {
     try { await downloads.save({ filename: file.name, data: file.data.slice(0) }); setStatus(`저장했어요: ${file.name}`); }
     catch (e) { if (e && e.code !== "declined") setStatus(`저장하지 못했어요 (${e.code || e}). 잠시 뒤 다시 눌러 주세요.`, "err"); }
   }
-  // 창고 버튼 = 출품표 + 일괄배송 2개. Claude 화면에서는 .xls 저장이 막혀 있어 .zip으로 묶음
-  async function saveGroup(key, zipName) {
-    const fs = result.files[key];
-    if (STANDALONE) { for (const f of fs) { await save(f); await new Promise((r) => setTimeout(r, 400)); } }
-    else save(await CORE.zip(fs, zipName));
+  // Claude 화면에서는 .xls 저장이 막혀 있어 .zip으로 묶음 (로그인 없는 웹에서는 바로 받음)
+  async function saveFiles(fs, zipName) {
+    if (STANDALONE || fs.every((f) => f.name.endsWith(".xlsx"))) {
+      for (const f of fs) { await save(f); await new Promise((r) => setTimeout(r, 400)); }
+    } else save(await CORE.zip(fs, zipName));
   }
-  $("b-hsc").addEventListener("click", () => saveGroup("hsc", `HSC_${result.tag}_${store}.zip`));
-  $("b-wz").addEventListener("click", () => saveGroup("wz", `위짐_${result.tag}_${store}.zip`));
-  $("b-jy").addEventListener("click", () => saveGroup("jy", `진양_${result.tag}_${store}.zip`));
+  $("b-hsc").addEventListener("click", () => saveFiles([result.files.hsc], ""));
+  $("b-wz").addEventListener("click", () => saveFiles([result.files.wz], result.files.wz.name.replace(/\.xls$/, ".zip")));
+  $("b-jy").addEventListener("click", () => saveFiles([result.files.jy], result.files.jy.name.replace(/\.xls$/, ".zip")));
+  $("b-bulk").addEventListener("click", () => saveFiles(result.bulk, `일괄배송_${result.tag}_${store}.zip`));
   $("b-all").addEventListener("click", async () => {
-    const files = Object.values(result.files).flat();
-    save(await CORE.zip(files, `변환완료_${result.tag}_${store}.zip`));
+    save(await CORE.zip([...Object.values(result.files), ...result.bulk], `변환완료_${result.tag}_${store}.zip`));
   });
 
   $("b-clear").addEventListener("click", () => {
