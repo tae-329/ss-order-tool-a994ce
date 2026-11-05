@@ -342,7 +342,7 @@ const CORE = (() => {
     const wz = orders.filter((o) => o.구분 === "3");
     const etc = orders.filter((o) => !["H", "J", "3"].includes(o.구분));
     const out = { orders, hsc, jy, wz, etc, tag, files: {} };
-    if (wz.length) out.files.wz = { name: `해피리빙 주식회사(647362)_${store}_20${tag}_변환완료.xls`, data: buildWezym(wz) };
+    if (wz.length) out.files.wz = { name: `${store}(위짐)_해피리빙 주식회사(647362)_20${tag}_변환완료.xls`, data: buildWezym(wz) };
     if (hsc.length) out.files.hsc = { name: `HSC_택배 발주서 해피리빙(${tag})_${store}_변환완료.xlsx`, data: buildHSC(hsc, store) };
     if (jy.length) out.files.jy = { name: `진양물류 통합양식_${tag}_${store}_변환완료.xls`, data: buildJinyang(jy) };
     // 일괄배송: 택배사별 2개 — CJ(위짐 먼저, 그 다음 진양) / 한진(HSC)
