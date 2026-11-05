@@ -127,14 +127,15 @@ button:focus-visible, .drop:focus-visible { outline: 3px solid var(--accent); ou
       <tbody id="rows"></tbody>
     </table></div>
     <div class="dl" id="dl">
-      <button id="b-all" class="primary" disabled>전체 한 번에 받기 (.zip)</button>
+      <button id="b-folder" class="ghost" hidden>저장 폴더 고르기</button>
+      <button id="b-all" class="primary" disabled>전체 한 번에 받기 (날짜_v번호.zip)</button>
       <button id="b-hsc" disabled>HSC (.xlsx)</button>
       <button id="b-jy" disabled>진양 (.zip)</button>
       <button id="b-wz" disabled>위짐 (.zip)</button>
       <button id="b-bulk" disabled>일괄배송 CJ·한진 (.zip)</button>
       <button id="b-clear" class="ghost" disabled>화면 지우기</button>
     </div>
-    <p class="note" id="dlnote">.xls 파일은 압축(.zip)으로 받아요. 일괄배송은 CJ(위짐+진양)·한진(HSC) 2개이고, 상품주문번호가 들어 있어 송장번호만 넣으면 돼요.</p>
+    <p class="note" id="dlnote">전체 저장은 "날짜_v번호_스토어" 폴더로 묶여요 (PC 크롬·엣지에서는 고른 폴더 안에 바로 저장). 일괄배송은 CJ(위짐+진양)·한진(HSC) 2개이고, E열에 물류사가 표시돼 있어요. 송장번호만 넣으면 돼요.</p>
     <p class="note">고객 정보는 서버에 저장되거나 전송되지 않고, 이 탭을 닫거나 "화면 지우기"를 누르면 사라져요. 함께 쓰는 PC에서는 다 받은 뒤 "화면 지우기"를 눌러 주세요.</p>
   </section>
 </div>
@@ -319,11 +320,12 @@ const CORE = (() => {
   }
 
   // 스마트스토어 일괄배송(발송처리) 업로드 양식 — 송장번호만 비움, 출품표와 같은 순서
-  function buildBulk(orders, courier) {
-    const aoa = [["상품주문번호", "배송방법", "택배사", "송장번호"].map(txt)];
-    for (const o of orders) aoa.push([txt(o.상품주문번호), txt("택배,등기,소포"), txt(courier), txt("")]);
+  // rows = [{ o: 주문, wh: "위짐" | "진양" | "HSC" }] — E열 '물류사(확인용)'은 헷갈리지 않게 보는 용도
+  function buildBulk(rows, courier) {
+    const aoa = [["상품주문번호", "배송방법", "택배사", "송장번호", "물류사(확인용)"].map(txt)];
+    for (const { o, wh } of rows) aoa.push([txt(o.상품주문번호), txt("택배,등기,소포"), txt(courier), txt(""), txt(wh)]);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, sheetFrom(aoa, [25, 32, 30, 30]), "발송처리");
+    XLSX.utils.book_append_sheet(wb, sheetFrom(aoa, [25, 32, 30, 30, 16]), "발송처리");
     return new Uint8Array(XLSX.write(wb, { type: "array", bookType: "biff8" }));
   }
 
@@ -347,9 +349,11 @@ const CORE = (() => {
     if (jy.length) out.files.jy = { name: `진양물류 통합양식_${tag}_${store}_변환완료.xls`, data: buildJinyang(jy) };
     // 일괄배송: 택배사별 2개 — CJ(위짐 먼저, 그 다음 진양) / 한진(HSC)
     out.bulk = [];
-    const cj = [...wz, ...jy];
+    const tagRows = (os, wh) => os.map((o) => ({ o, wh }));
+    const cj = [...tagRows(wz, "위짐"), ...tagRows(jy, "진양")];
     if (cj.length) out.bulk.push({ name: `일괄배송_CJ대한통운_${tag}_${store}.xls`, data: buildBulk(cj, "CJ대한통운") });
-    if (hsc.length) out.bulk.push({ name: `일괄배송_한진택배_${tag}_${store}.xls`, data: buildBulk(hsc, "한진택배") });
+    if (hsc.length) out.bulk.push({ name: `일괄배송_한진택배_${tag}_${store}.xls`, data: buildBulk(tagRows(hsc, "HSC"), "한진택배") });
+    out.date = "20" + tag;
     return out;
   }
 
@@ -475,8 +479,58 @@ const CORE = (() => {
   $("b-wz").addEventListener("click", () => saveFiles([result.files.wz], result.files.wz.name.replace(/\.xls$/, ".zip")));
   $("b-jy").addEventListener("click", () => saveFiles([result.files.jy], result.files.jy.name.replace(/\.xls$/, ".zip")));
   $("b-bulk").addEventListener("click", () => saveFiles(result.bulk, `일괄배송_${result.tag}_${store}.zip`));
+  // ── 전체 저장: 고른 폴더 안에 "날짜_v번호_스토어" 폴더를 만들어 저장 (PC 크롬·엣지) / 안 되는 곳은 같은 이름의 .zip ──
+  const FOLDER = STANDALONE && "showDirectoryPicker" in window;
+  const idb = (mode, fn) => new Promise((res, rej) => {
+    const r = indexedDB.open("ss-tool", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("kv");
+    r.onerror = () => rej(r.error);
+    r.onsuccess = () => { const tx = r.result.transaction("kv", mode); const q = fn(tx.objectStore("kv"));
+      tx.oncomplete = () => res(q && q.result); tx.onerror = () => rej(tx.error); };
+  });
+  let dirHandle = null;
+  function paintFolder() { $("b-folder").textContent = dirHandle ? `저장 폴더: ${dirHandle.name} (바꾸기)` : "저장 폴더 고르기"; }
+  async function pickFolder() {
+    dirHandle = await window.showDirectoryPicker({ id: "ss-tool", mode: "readwrite" });
+    try { await idb("readwrite", (st) => st.put(dirHandle, "dir")); } catch (e) {}
+    paintFolder();
+  }
+  if (FOLDER) {
+    $("b-folder").hidden = false;
+    $("b-all").textContent = "폴더에 전체 저장 (날짜_v번호)";
+    (async () => { try { dirHandle = (await idb("readonly", (st) => st.get("dir"))) || null; } catch (e) {} paintFolder(); })();
+    $("b-folder").addEventListener("click", () => pickFolder().catch(() => {}));
+  }
+  const runName = (v) => `${result.date}_v${v}_${store}`;
+  async function nextVersion() {
+    const re = new RegExp(`^${result.date}_v(\\d+)_${store}$`);
+    let max = 0;
+    for await (const [name, h] of dirHandle.entries()) { const m = h.kind === "directory" && name.match(re); if (m) max = Math.max(max, +m[1]); }
+    return max + 1;
+  }
+  async function saveToFolder(files) {
+    if (!dirHandle) await pickFolder();
+    if ((await dirHandle.requestPermission({ mode: "readwrite" })) !== "granted") throw new Error("폴더 저장 권한이 없어요");
+    if (!result.runDir) result.runDir = runName(await nextVersion());   // 같은 변환 결과는 같은 폴더에 덮어씀
+    const sub = await dirHandle.getDirectoryHandle(result.runDir, { create: true });
+    for (const f of files) {
+      const w = await (await sub.getFileHandle(f.name, { create: true })).createWritable();
+      await w.write(f.data); await w.close();
+    }
+    setStatus(`저장했어요: ${dirHandle.name} › ${result.runDir} (파일 ${files.length}개)`);
+  }
   $("b-all").addEventListener("click", async () => {
-    save(await CORE.zip([...Object.values(result.files), ...result.bulk], `변환완료_${result.tag}_${store}.zip`));
+    const files = [...Object.values(result.files), ...result.bulk];
+    if (FOLDER) {
+      try { await saveToFolder(files); return; }
+      catch (e) { if (e && e.name === "AbortError") return; setStatus(`폴더에 저장하지 못했어요 (${e.message || e}) — .zip으로 받을게요`, "err"); }
+    }
+    if (!result.runDir) {   // 폴더를 못 쓰는 곳: 이 기기에서 같은 날짜·스토어로 받은 횟수로 v번호
+      let v = 1; const key = `v:${result.date}:${store}`;
+      try { v = (+localStorage.getItem(key) || 0) + 1; localStorage.setItem(key, String(v)); } catch (e) {}
+      result.runDir = runName(v);
+    }
+    save(await CORE.zip(files.map((f) => ({ name: `${result.runDir}/${f.name}`, data: f.data })), `${result.runDir}.zip`));
   });
 
   $("b-clear").addEventListener("click", () => {
